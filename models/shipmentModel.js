@@ -45,6 +45,26 @@ const ShipmentModel = {
 
         if (sError || !shipment) return null;
         return shipment;
+    },
+
+    // NUEVA FUNCIÓN: Inserta una actualización de estado o cancelación en el historial
+    async updateStatus(trackingNumber, newStatus, location) {
+        const { data: shipment, error: sError } = await supabase
+            .from('shipments')
+            .select('id')
+            .eq('tracking_number', trackingNumber)
+            .single();
+
+        if (sError || !shipment) return null;
+
+        const { data: event, error: tError } = await supabase
+            .from('tracking_events')
+            .insert([{ shipment_id: shipment.id, status: newStatus, current_location: location }])
+            .select()
+            .single();
+
+        if (tError) throw tError;
+        return event;
     }
 };
 

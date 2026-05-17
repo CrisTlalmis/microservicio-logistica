@@ -18,6 +18,18 @@ const shipmentRoutes = (req, res) => {
             ShipmentController.createShipment(req, res, bodyText);
         });
     } 
+    // RUTA PATCH: Actualizar Estado o Cancelación Inesperada (/shipments/TRACK-XXXXXX/status)
+    else if (url.startsWith('/shipments/') && url.endsWith('/status') && method === 'PATCH') {
+        const urlParts = url.split('/');
+        const trackingNumber = urlParts[2]; // Extrae de forma dinámica el número de guía de la URI elegante
+        
+        let body = [];
+        req.on('data', (chunk) => { body.push(chunk); }); // Procesamiento del stream de datos entrante
+        req.on('end', () => {
+            const bodyText = Buffer.concat(body).toString();
+            ShipmentController.updateShipmentStatus(req, res, trackingNumber, bodyText);
+        });
+    }
     // RUTA GET: Rastrear Paquete (Recurso anidado en URL)
     else if (url.startsWith('/shipments/') && method === 'GET') {
         const urlParts = url.split('/');

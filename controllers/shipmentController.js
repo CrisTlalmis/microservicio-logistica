@@ -57,6 +57,54 @@ const ShipmentController = {
             res.statusCode = 500; // Internal Server Error
             res.end(JSON.stringify({ error: "Fallo en la comunicación con la bóveda de datos" }));
         }
+    },
+
+    async updateShipmentStatus(req, res, trackingNumber, bodyText) {
+        try {
+            // Manejo de excepciones para evitar el colapso del proceso asíncrono
+            const body = JSON.parse(bodyText);
+            const { status, location } = body;
+
+            if (!status || !location) {
+                res.statusCode = 400; // Bad Request
+                return res.end(JSON.stringify({ error: "El estado y la ubicación física son obligatorios" }));
+            }
+
+            const validStatuses = ['PREPARACION', 'RECOLECCION', 'TRANSITO', 'ENTREGA', 'CANCELADO'];
+            if (!validStatuses.includes(status)) {
+                res.statusCode = 400;
+                return res.end(JSON.stringify({ error: "El estado proporcionado no pertenece al catálogo homologado" }));
+            }
+
+            // Recuperamos el historial analítico para validar las reglas antes de escribir en la bóveda
+            const shipment = await ShipmentModel.findByTrackingNumber(trackingNumber);
+            if (!shipment) {
+                res.statusCode = 404; // Not Found
+                return res.end(JSON.stringify({ error: "El número de guía proporcionado no existe en el sistema" }));
+            }
+
+            const currentEvents = shipment.tracking_events || [];
+            const lastEvent = currentEvents[currentEvents.length - 1];
+            const currentStatus = lastEvent ? lastEvent.status : '';
+
+            // Regla de negocio: No se puede cancelar o alterar un flujo logístico ya concluido
+            if (currentStatus === 'ENTREGA' || currentStatus === 'CANCELADO') {
+                res.statusCode = 409; // Conflict
+                return res.end(JSON.stringify({ 
+                    error: `Acción denegada. El envío ya se encuentra concluido en estado: ${currentStatus}` 
+                }));
+            }
+
+            // Persistimos el cambio de estado en la nube
+            const result = await ShipmentModel.updateStatus(trackingNumber, status, location);
+            
+            res.statusCode = 200; // OK
+            res.end(JSON.stringify({ mensaje: "Hito logístico actualizado con éxito", datos: result }));
+
+        } catch (error) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: "Estructura de payload JSON inválida", detalles: error.message }));
+        }
     }
 };
 
